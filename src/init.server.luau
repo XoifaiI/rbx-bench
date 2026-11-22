@@ -19,7 +19,7 @@ end
 local Dock = require("@self/Ui/Dock")
 local Services = require("@self/Studio/Services")
 
-local WIDGET_INFO = DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Bottom, false, false, 900, 320, 560, 200)
+local WIDGET_INFO = DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Bottom, false, false, 900, 320, 480, 280)
 
 local Toolbar = plugin:CreateToolbar("rbx-bench")
 local Toggle = Toolbar:CreateButton("rbx-bench", "Show or hide the benchmark panel", "")

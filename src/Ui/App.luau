@@ -17,11 +17,13 @@ local Tooltip = require("./Tooltip")
 local new = Flux.new
 local Text = Components.Text
 
-local WIDE_FROM = 1100
+local WIDE_FROM = 760
+local ROOMY_FROM = 1040
 local LIST_WIDTH = 240
 local LIST_HEIGHT_WHEN_NARROW = 190
-local MIN_WIDTH = 640
-local MIN_HEIGHT = 300
+local SHORTEST_WIDE = 280
+local NARROWEST = 480
+local SHORTEST_STACKED = 600
 local PROGRESS_HEIGHT = 3
 
 local App = {}
@@ -40,7 +42,10 @@ local function Panel(state: State.State, tooltip: Tooltip.Tooltip): Frame
 		end)
 
 		local tooSmall = Flux.computed(function(): boolean
-			return size().X < MIN_WIDTH or size().Y < MIN_HEIGHT
+			if wide() then
+				return size().Y < SHORTEST_WIDE
+			end
+			return size().X < NARROWEST or size().Y < SHORTEST_STACKED
 		end)
 
 		local rows = CaseRows.ranked(state)
@@ -56,7 +61,12 @@ local function Panel(state: State.State, tooltip: Tooltip.Tooltip): Frame
 				Flux.padding(Layout.Inset),
 				Flux.list({ gap = Layout.Gap }),
 
-				Toolbar({ state = state }),
+				Toolbar({
+					state = state,
+					isCompact = function()
+						return size().X < ROOMY_FROM
+					end,
+				}),
 
 				new "Frame" {
 					Name = "Body",
@@ -116,7 +126,7 @@ local function Panel(state: State.State, tooltip: Tooltip.Tooltip): Frame
 			},
 
 			Text({
-				text = `Dock too small. Make it at least {MIN_WIDTH} by {MIN_HEIGHT}.`,
+				text = `Panel too small. Make it at least {WIDE_FROM} by {SHORTEST_WIDE}, or {NARROWEST} by {SHORTEST_STACKED}.`,
 				tags = { "TextDim" },
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				Position = UDim2.fromScale(0.5, 0.5),

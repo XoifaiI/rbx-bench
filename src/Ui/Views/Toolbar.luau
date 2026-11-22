@@ -1,5 +1,6 @@
 --!strict
 --- The top bar: run or cancel, the round count, the selected bench, a button per input size, and the run strip.
+--- A compact bar drops when the bench last ran and the strip's bars, so it fits a narrow panel.
 
 local Flux = require("../../Packages/Flux")
 local Components = require("../Components")
@@ -21,7 +22,7 @@ local BAR_GAP = 3
 local SHORTEST_BAR = 0.15
 local ROUNDS_FIELD_WIDTH = 110
 
-local function RunStrip(props: { state: State.State }): Frame
+local function RunStrip(props: { state: State.State, isCompact: () -> boolean }): Frame
 	local state = props.state
 
 	local tallest = Flux.computed(function(): number
@@ -55,6 +56,9 @@ local function RunStrip(props: { state: State.State }): Frame
 			Name = "Bars",
 			AutomaticSize = Enum.AutomaticSize.X,
 			Size = UDim2.fromOffset(0, BARS_HEIGHT),
+			Visible = function()
+				return not props.isCompact()
+			end,
 
 			Flux.list({ direction = "x", gap = BAR_GAP, align = "end" }),
 
@@ -90,7 +94,9 @@ local function RunStrip(props: { state: State.State }): Frame
 
 		Text({
 			text = function()
-				return `Run {state.runIndex()} of {#state.runs()}`
+				return if props.isCompact()
+					then `{state.runIndex()} / {#state.runs()}`
+					else `Run {state.runIndex()} of {#state.runs()}`
 			end,
 			tags = { "TextDim" },
 		}),
@@ -163,7 +169,7 @@ local function Rounds(props: { state: State.State }): Frame
 	}
 end
 
-local function Toolbar(props: { state: State.State }): Frame
+local function Toolbar(props: { state: State.State, isCompact: () -> boolean }): Frame
 	local state = props.state
 
 	local function hasBench(): boolean
@@ -204,6 +210,9 @@ local function Toolbar(props: { state: State.State }): Frame
 				return if run then `Ran {Format.Ago(os.time() - run.Finished)}` else "Not run yet"
 			end,
 			tags = { "TextDim" },
+			Visible = function()
+				return not props.isCompact()
+			end,
 		}),
 
 		Button({ text = "Open script", enabled = hasBench, onClick = state.open }),
@@ -227,7 +236,7 @@ local function Toolbar(props: { state: State.State }): Frame
 
 		new "Frame" { Name = "Spacer", Flux.flex() },
 
-		RunStrip({ state = state }),
+		RunStrip({ state = state, isCompact = props.isCompact }),
 
 		Button({
 			text = "Clear runs",

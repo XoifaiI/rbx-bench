@@ -3,7 +3,8 @@
 --- zero, with the slowest case reaching LONGEST_REACH of the width, so the bars are not on the plot's time axis,
 --- which starts at the fastest sample. A case that ran spans has their flame graph under its bar, one line per
 --- depth, as wide as the bar; a span too narrow for its name is listed beside the flame graph with a chip of its
---- color. Picking a bar shows that case's curve alone.
+--- color. A case's label goes inside its bar or after it, wherever it fits, and drops its badge when neither side
+--- has room for both. Picking a bar shows that case's curve alone.
 
 local Flux = require("../../Packages/Flux")
 local Components = require("../Components")
@@ -48,12 +49,15 @@ local FLAME_HEIGHT = 18
 local FLAME_GAP = 2
 local FLAME_STEP = FLAME_HEIGHT + FLAME_GAP
 local MEDIANS_TALLEST = 250
+local MEDIANS_SHORTEST = 56
+local PLOT_SHORTEST = 96
 local REST_BELOW = 44
 local ROW_LEVEL = 1
 local SEGMENT_LEVEL = 2
-local LABEL_INSIDE_FROM = 0.3
 local LABEL_GAP = 10
 local LABEL_INSET = 6
+local BADGE_CHARACTER_WIDTH = 7
+local BADGE_INSETS = 18
 local SEGMENT_INSET = 6
 local LEGEND_CHIP = 10
 local LEGEND_CHIP_GAP = 5
@@ -229,9 +233,68 @@ local function MedianBar(props: {
 		return row().colorIndex
 	end
 
-	local function placement(): Placement
-		return if reach() >= LABEL_INSIDE_FROM then "inside" else "after"
+	local label = new "Frame" {
+		Name = "Label",
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromOffset(0, BAR_HEIGHT),
+		ZIndex = 2,
+
+		Flux.padding({ x = LABEL_INSET }),
+		Flux.list({ direction = "x", gap = LABEL_GAP, align = "center" }),
+	}
+
+	local isInside = Flux.signal(false)
+
+	local caption = Text({
+		text = function()
+			local case = row().case
+			return `{case.Name}   {Format.Time(case.Stats.Median)}`
+		end,
+		tags = {
+			"TextStrong",
+			function(): string?
+				return if isInside() then "TextOnInk" else nil
+			end,
+		},
+	})
+
+	local captionSize = Flux.property(caption, "AbsoluteSize")
+
+	local function verdict(): string
+		return Format.Verdict(row().case.Kind, row().case.Ratio)
 	end
+
+	local function fit(): (Placement, boolean)
+		local bare = LABEL_INSET * 2 + captionSize().X + Layout.GapSmall
+		local full = bare + LABEL_GAP + (utf8.len(verdict()) or #verdict()) * BADGE_CHARACTER_WIDTH + BADGE_INSETS
+		local inside = barWidth()
+		local after = trackSize().X - inside
+
+		if full <= inside then
+			return "inside", true
+		elseif full <= after then
+			return "after", true
+		elseif bare <= inside then
+			return "inside", false
+		elseif bare <= after then
+			return "after", false
+		end
+		return if inside >= after then "inside" else "after", false
+	end
+
+	local placement = Flux.computed(function(): Placement
+		local side = fit()
+		return side
+	end)
+
+	local showsBadge = Flux.computed(function(): boolean
+		local _, shows = fit()
+		return shows
+	end)
+
+	Flux.effect(function()
+		isInside(placement() == "inside")
+	end)
 
 	local unnamed = Flux.computed(function(): { Segment }
 		local missing: { Segment } = {}
@@ -295,41 +358,23 @@ local function MedianBar(props: {
 			end),
 		},
 
-		new "Frame" {
-			Name = "Label",
-			AutomaticSize = Enum.AutomaticSize.X,
-			Size = UDim2.fromOffset(0, BAR_HEIGHT),
-			ZIndex = 2,
+		Flux.edit(label) {
 			Position = function()
 				return if placement() == "inside"
 					then UDim2.fromOffset(Layout.GapSmall - LABEL_INSET, 0)
 					else UDim2.new(reach(), Layout.GapSmall - LABEL_INSET, 0, 0)
 			end,
 
-			Flux.padding({ x = LABEL_INSET }),
-			Flux.list({ direction = "x", gap = LABEL_GAP, align = "center" }),
+			caption,
 
-			Text({
-				text = function()
-					local case = row().case
-					return `{case.Name}   {Format.Time(case.Stats.Median)}`
-				end,
-				tags = {
-					"TextStrong",
-					function(): string?
-						return if placement() == "inside" then "TextOnInk" else nil
-					end,
-				},
-			}),
-
-			Components.Badge({
-				text = function()
-					return Format.Verdict(row().case.Kind, row().case.Ratio)
-				end,
+			Flux.edit(Components.Badge({
+				text = verdict,
 				tone = function()
 					return TONE[row().case.Kind]
 				end,
-			}),
+			})) {
+				Visible = showsBadge,
+			},
 		},
 	}
 
@@ -375,6 +420,13 @@ local function Chart(props: ChartProps): Frame
 		return total
 	end)
 
+	local cardHeight = Flux.signal(0)
+
+	local function barsRoom(): number
+		local beside = Layout.Inset * 2 + TICKS_HEIGHT + STACK_GAP * 2 + PLOT_SHORTEST
+		return math.clamp(cardHeight() - beside, MEDIANS_SHORTEST, MEDIANS_TALLEST)
+	end
+
 	local axis: Axis = {
 		low = function(): number
 			local first = rows()[1]
@@ -412,7 +464,7 @@ local function Chart(props: ChartProps): Frame
 		)
 	end
 
-	return Components.Card({
+	local card = Components.Card({
 		Name = "Chart",
 		Size = props.size,
 
@@ -463,7 +515,7 @@ local function Chart(props: ChartProps): Frame
 			Components.Scroller({
 				Name = "Medians",
 				Size = function()
-					return UDim2.new(1, 0, 0, math.min(barsHeight(), MEDIANS_TALLEST))
+					return UDim2.new(1, 0, 0, math.min(barsHeight(), barsRoom()))
 				end,
 
 				Flux.padding({ left = Y_AXIS_WIDTH, bottom = REST_BELOW }),
@@ -479,6 +531,13 @@ local function Chart(props: ChartProps): Frame
 			}),
 		},
 	})
+
+	local cardSize = Flux.property(card, "AbsoluteSize")
+	Flux.effect(function()
+		cardHeight(cardSize().Y)
+	end)
+
+	return card
 end
 
 return Chart
