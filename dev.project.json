@@ -1,0 +1,9 @@
+{
+	"name": "rbx-bench",
+	"tree": {
+		"$path": "src",
+		"$attributes": {
+			"dev": true
+		}
+	}
+}
