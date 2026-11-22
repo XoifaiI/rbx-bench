@@ -20,7 +20,7 @@
 
 A bench is a ModuleScript that describes a suite. The plugin does the measuring.
 
-```luau
+```lua
 --!strict
 local Bench = require("../Bench")
 
@@ -92,7 +92,7 @@ A run is thrown away, with the reason in red, when a rule fails or when the base
 
 ### Spans
 
-```luau
+```lua
 local Encode = Suite:Span("encode")
 
 Suite:Case("round trip", function(Input)
@@ -108,7 +108,7 @@ Spans cost a call and a branch while timing. They are recorded in a separate pas
 
 ### Rules
 
-```luau
+```lua
 Suite:Rule("fast path stays faster", function(Run)
 	local Comparison = Run:Compare(Fast, Slow)
 	return Comparison.Significant and Comparison.Ratio < 1, `ratio {Comparison.Ratio}`
@@ -126,7 +126,7 @@ end)
 
 Studio caches a module the first time it is required. A bench is run from a fresh copy every time, and `Bench.Import` does the same for a module outside it:
 
-```luau
+```lua
 local Library = Bench.Import(ReplicatedStorage.Library)
 ```
 
