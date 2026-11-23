@@ -278,7 +278,7 @@ function Results.Judge(
 	local Fastest: number? = nil
 	local SlowestShown = 0
 	for Index in Cases do
-		local Summary = Stats.Summarize(Measurement.Samples[Index], Measurement.Bytes[Index])
+		local Summary = Stats.Summarize(Measurement.Samples[Index])
 		Summaries[Index] = Summary
 		Fastest = if Fastest then math.min(Fastest, Summary.Min) else Summary.Min
 		SlowestShown = math.max(SlowestShown, Summary.P90 + (Summary.P90 - Summary.Min) * TAIL_SHOWN)

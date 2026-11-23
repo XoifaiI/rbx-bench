@@ -34,9 +34,6 @@ local ENVIRONMENT: Timing.Environment = {
 	Yield = function()
 		task.wait()
 	end,
-	Memory = function(): number
-		return gcinfo()
-	end,
 }
 
 local BenchRunner = {}

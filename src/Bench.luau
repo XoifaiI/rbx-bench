@@ -25,7 +25,6 @@ export type Stats = {
 	High: number,
 	Spread: number,
 	Samples: { number },
-	Bytes: number,
 }
 
 export type Comparison = {

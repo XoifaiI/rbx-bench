@@ -4,8 +4,9 @@
 
 --[=[
 	RunFormat: packs a bench's runs into one buffer and back, for saving. Samples are not kept. Fields are byte-aligned
-	columns so zstd compresses them well. Change the layout only together with FORMAT_VERSION. Version 1, which had
-	no span depths, is still read, with every span at depth 1
+	columns so zstd compresses them well. Change the layout only together with FORMAT_VERSION and LAYOUTS. Older
+	versions are still read: version 1 had no span depths and reads every span at depth 1, and version 2's bytes per
+	call column is skipped
 
 	Return type: the RunFormat module table
 	Example usage:
@@ -67,15 +68,24 @@ type Sections = {
 	Length: number,
 }
 
-local FORMAT_VERSION = 2
-local VERSION_BEFORE_DEPTH = 1
+type Layout = {
+	CaseNumbers: number,
+	HistogramAt: number,
+	SpanNumbers: number,
+	HasDepth: boolean,
+}
+
+local FORMAT_VERSION = 3
 local HEADER_BYTES = 48
+
+local LAYOUTS: { [number]: Layout } = {
+	[1] = { CaseNumbers = 12, HistogramAt = 9, SpanNumbers = 3, HasDepth = false },
+	[2] = { CaseNumbers = 12, HistogramAt = 9, SpanNumbers = 4, HasDepth = true },
+	[3] = { CaseNumbers = 11, HistogramAt = 8, SpanNumbers = 4, HasDepth = true },
+}
 
 local RUN_NUMBERS = 2
 local SIZE_NUMBERS = 2
-local CASE_NUMBERS = 12
-local SPAN_NUMBERS = 4
-local SPAN_NUMBERS_BEFORE_DEPTH = 3
 local METRIC_NUMBERS = 1
 
 local RUN_WORDS = 1
@@ -150,11 +160,11 @@ local function SumsOf(SampleCount: number): buffer
 	return Sums
 end
 
-local function SectionsOf(Counts: Counts, NumbersPerSpan: number): Sections
+local function SectionsOf(Counts: Counts, Layout: Layout): Sections
 	local RunNumbers = Counts.Runs * RUN_NUMBERS
 	local SizeNumbers = Counts.Sizes * SIZE_NUMBERS
-	local CaseNumbers = Counts.Cases * CASE_NUMBERS
-	local SpanNumbers = Counts.Spans * NumbersPerSpan
+	local CaseNumbers = Counts.Cases * Layout.CaseNumbers
+	local SpanNumbers = Counts.Spans * Layout.SpanNumbers
 	local Numbers = RunNumbers + SizeNumbers + CaseNumbers + SpanNumbers + Counts.Metrics * METRIC_NUMBERS
 
 	local RunLow = HEADER_BYTES
@@ -404,10 +414,9 @@ local function Write(
 				PutNumber(Target, CaseLow + LowStep * 5, CaseHigh + HighStep * 5, CaseStats.Low)
 				PutNumber(Target, CaseLow + LowStep * 6, CaseHigh + HighStep * 6, CaseStats.High)
 				PutNumber(Target, CaseLow + LowStep * 7, CaseHigh + HighStep * 7, CaseStats.Spread)
-				PutNumber(Target, CaseLow + LowStep * 8, CaseHigh + HighStep * 8, CaseStats.Bytes)
-				PutNumber(Target, CaseLow + LowStep * 9, CaseHigh + HighStep * 9, Histogram.Low)
-				PutNumber(Target, CaseLow + LowStep * 10, CaseHigh + HighStep * 10, Histogram.High)
-				PutNumber(Target, CaseLow + LowStep * 11, CaseHigh + HighStep * 11, SampleCount)
+				PutNumber(Target, CaseLow + LowStep * 8, CaseHigh + HighStep * 8, Histogram.Low)
+				PutNumber(Target, CaseLow + LowStep * 9, CaseHigh + HighStep * 9, Histogram.High)
+				PutNumber(Target, CaseLow + LowStep * 10, CaseHigh + HighStep * 10, SampleCount)
 				CaseLow += 6
 				CaseHigh += 2
 
@@ -527,8 +536,10 @@ local function Read(
 	Sections: Sections,
 	Counts: Counts,
 	Strings: { string },
-	HasDepth: boolean
+	Layout: Layout
 ): { RunRecord }?
+	local HasDepth = Layout.HasDepth
+	local HistogramAt = Layout.HistogramAt
 	local RunCount, SizeCount, CaseCount = Counts.Runs, Counts.Sizes, Counts.Cases
 	local SpanCount, RuleCount = Counts.Spans, Counts.Rules
 
@@ -622,7 +633,8 @@ local function Read(
 				BinsLeft -= BinsHere
 
 				local LowStep, HighStep = CaseCount * 6, CaseCount * 2
-				local SampleCount = GetNumber(Source, CaseLow + LowStep * 11, CaseHigh + HighStep * 11)
+				local SampleCount =
+					GetNumber(Source, CaseLow + LowStep * (HistogramAt + 2), CaseHigh + HighStep * (HistogramAt + 2))
 
 				local Bins = table.create(BinsHere, 0)
 				if BinsKind == BINS_AS_COUNTS then
@@ -714,11 +726,14 @@ local function Read(
 						High = GetNumber(Source, CaseLow + LowStep * 6, CaseHigh + HighStep * 6),
 						Spread = GetNumber(Source, CaseLow + LowStep * 7, CaseHigh + HighStep * 7),
 						Samples = {},
-						Bytes = GetNumber(Source, CaseLow + LowStep * 8, CaseHigh + HighStep * 8),
 					},
 					Histogram = {
-						Low = GetNumber(Source, CaseLow + LowStep * 9, CaseHigh + HighStep * 9),
-						High = GetNumber(Source, CaseLow + LowStep * 10, CaseHigh + HighStep * 10),
+						Low = GetNumber(Source, CaseLow + LowStep * HistogramAt, CaseHigh + HighStep * HistogramAt),
+						High = GetNumber(
+							Source,
+							CaseLow + LowStep * (HistogramAt + 1),
+							CaseHigh + HighStep * (HistogramAt + 1)
+						),
 						SampleCount = SampleCount,
 						Bins = Bins,
 					},
@@ -761,7 +776,7 @@ end
 
 function RunFormat.Encode(Runs: { RunRecord }): buffer
 	local Counts, Ids, Strings = Census(Runs)
-	local Sections = SectionsOf(Counts, SPAN_NUMBERS)
+	local Sections = SectionsOf(Counts, LAYOUTS[FORMAT_VERSION])
 
 	local Target = buffer.create(Sections.Length)
 	WriteHeader(Target, Counts)
@@ -778,17 +793,16 @@ function RunFormat.Decode(Encoded: buffer): (Outcome, { RunRecord })
 	if Length < 4 then
 		return "damaged", {}
 	end
-	local Version = buffer.readu32(Encoded, 0)
-	if Version ~= FORMAT_VERSION and Version ~= VERSION_BEFORE_DEPTH then
+	local Layout = LAYOUTS[buffer.readu32(Encoded, 0)]
+	if not Layout then
 		return "unsupported", {}
 	end
 	if Length < HEADER_BYTES then
 		return "damaged", {}
 	end
 
-	local HasDepth = Version ~= VERSION_BEFORE_DEPTH
 	local Counts = ReadHeader(Encoded)
-	local Sections = SectionsOf(Counts, if HasDepth then SPAN_NUMBERS else SPAN_NUMBERS_BEFORE_DEPTH)
+	local Sections = SectionsOf(Counts, Layout)
 	if Sections.Length ~= Length then
 		return "damaged", {}
 	end
@@ -798,7 +812,7 @@ function RunFormat.Decode(Encoded: buffer): (Outcome, { RunRecord })
 		return "damaged", {}
 	end
 
-	local Runs = Read(Encoded, Sections, Counts, Strings, HasDepth)
+	local Runs = Read(Encoded, Sections, Counts, Strings, Layout)
 	if not Runs then
 		return "damaged", {}
 	end

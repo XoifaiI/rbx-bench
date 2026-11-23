@@ -117,7 +117,7 @@ end)
 
 | Call | Returns |
 |---|---|
-| `Run:Of(Case)` | `Min`, `Median`, `Mean`, `P90`, `Low`, `High`, `Spread`, `Samples` and `Bytes` per call. Times are nanoseconds per call. |
+| `Run:Of(Case)` | `Min`, `Median`, `Mean`, `P90`, `Low`, `High`, `Spread` and `Samples` per call. Times are nanoseconds per call. |
 | `Run:Compare(First, Second)` | `Ratio` of the first to the second, its `Low` and `High` bounds, and whether it is `Significant`. |
 | `Run:Span(Case, Span)` | The span's `Time`, `Count` and `Share` in that case. |
 | `Run.Previous` | The same size from the run before, when there is one. |

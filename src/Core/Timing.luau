@@ -3,9 +3,8 @@
 --!optimize 2
 
 --[=[
-	Timing: times a set of functions against each other in rounds of batched calls, and measures the bytes each
-	allocates per call. Every round runs them in a newly shuffled order, because a function's time depends on what ran
-	just before it. Calibrate sizes the batches and says how long one round will take. Samples are nanoseconds per
+	Timing: times a set of functions against each other in rounds of batched calls. Every round runs them in a newly
+	shuffled order, because a function's time depends on what ran just before it. Calibrate sizes the batches and says how long one round will take. Samples are nanoseconds per
 	call with call overhead removed. Measure returns nil when Progress answers false
 
 	Return type: the Timing module table
@@ -17,7 +16,6 @@
 export type Environment = {
 	Clock: () -> number,
 	Yield: () -> (),
-	Memory: () -> number,
 }
 
 export type Options = {
@@ -25,7 +23,6 @@ export type Options = {
 	BatchSeconds: number,
 	WarmSeconds: number,
 	FrameSeconds: number,
-	MemoryBatches: number,
 }
 
 export type Calibration = {
@@ -37,7 +34,6 @@ export type Calibration = {
 export type Measurement = {
 	Samples: { { number } },
 	Control: { number },
-	Bytes: { number },
 	Outputs: { any },
 	Calls: { number },
 }
@@ -60,9 +56,6 @@ local EMPTY_SAMPLES = 30
 local SHUFFLE_SEED = 20261122
 local SHUFFLE_MULTIPLIER = 48271
 local SHUFFLE_MODULUS = 2147483647
-local MEMORY_BATCH_SECONDS = 2e-3
-local SHORTEST_MEMORY_BATCH = 16
-local LONGEST_MEMORY_BATCH = 4096
 
 local Timing = {}
 
@@ -71,7 +64,6 @@ Timing.Defaults = {
 	BatchSeconds = 120e-6,
 	WarmSeconds = 300e-6,
 	FrameSeconds = 16e-3,
-	MemoryBatches = 5,
 } :: Options
 
 local function Nothing(_Input: any): any
@@ -212,12 +204,11 @@ function Timing.Measure(
 	local Count = #Plan.Runs
 	local ControlSlot = Count + 1
 	local EmptySlot = Count + 2
-	local Largest = if Plan.Fresh then FRESH_LARGEST_BATCH else LARGEST_BATCH
 	local Timed, Owners = SlotsOf(Plan)
 	local Inputs: { any } = {}
 
-	local function Batch(Slot: number, BatchCalls: number, Meter: () -> number): number
-		return BatchOf(Plan, Timed[Slot], Owners[Slot], BatchCalls, Inputs, Meter)
+	local function Batch(Slot: number, BatchCalls: number): number
+		return BatchOf(Plan, Timed[Slot], Owners[Slot], BatchCalls, Inputs, Clock)
 	end
 
 	local Calls = table.clone(Calibration.Calls)
@@ -254,17 +245,17 @@ function Timing.Measure(
 
 				local Resumed = Clock()
 				while Clock() - Resumed < Options.WarmSeconds do
-					Batch(Baseline, Calls[Baseline], Clock)
+					Batch(Baseline, Calls[Baseline])
 				end
 				LastYield = Clock()
 			end
 
 			local Slot = Order[Position]
-			Samples[Slot][Round] = Batch(Slot, Calls[Slot], Clock) / Calls[Slot] * 1e9
+			Samples[Slot][Round] = Batch(Slot, Calls[Slot]) / Calls[Slot] * 1e9
 		end
 
 		if Round % EmptyEvery == 0 then
-			Overhead = math.min(Overhead, Batch(EmptySlot, Calls[EmptySlot], Clock) / Calls[EmptySlot] * 1e9)
+			Overhead = math.min(Overhead, Batch(EmptySlot, Calls[EmptySlot]) / Calls[EmptySlot] * 1e9)
 		end
 	end
 
@@ -272,29 +263,6 @@ function Timing.Measure(
 		for Round, Sample in Samples[Slot] do
 			Samples[Slot][Round] = math.max(Sample - Overhead, 0)
 		end
-	end
-
-	local Bytes = table.create(Count, 0)
-	for Slot = 1, Count do
-		if Clock() - LastYield > Options.FrameSeconds then
-			if not Progress(1) then
-				return nil
-			end
-			Environment.Yield()
-			LastYield = Clock()
-		end
-
-		local PerCall = math.max(Samples[Slot][1] * 1e-9, 1e-9)
-		local MemoryCalls = math.min(
-			math.clamp(math.round(MEMORY_BATCH_SECONDS / PerCall), SHORTEST_MEMORY_BATCH, LONGEST_MEMORY_BATCH),
-			Largest
-		)
-
-		local Most = 0
-		for _ = 1, Options.MemoryBatches do
-			Most = math.max(Most, Batch(Slot, MemoryCalls, Environment.Memory) * 1024 / MemoryCalls)
-		end
-		Bytes[Slot] = Most
 	end
 
 	local Control = Samples[ControlSlot]
@@ -305,7 +273,6 @@ function Timing.Measure(
 	return {
 		Samples = Samples,
 		Control = Control,
-		Bytes = Bytes,
 		Outputs = Outputs,
 		Calls = Calls,
 	}

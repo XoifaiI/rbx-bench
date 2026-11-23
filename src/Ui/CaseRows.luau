@@ -97,7 +97,6 @@ function CaseRows.describe(row: Row): Tooltip.Content
 		{ label = "Fastest", value = Format.Time(stats.Min) },
 		{ label = "90th percentile", value = Format.Time(stats.P90) },
 		{ label = "Spread", value = Format.Percent(stats.Spread) },
-		{ label = "Allocated per call", value = Format.Bytes(stats.Bytes) },
 	}
 	for _, segment in CaseRows.flame(case) do
 		local line: Tooltip.Line = {

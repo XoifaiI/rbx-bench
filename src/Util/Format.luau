@@ -2,7 +2,7 @@
 --!optimize 2
 
 --[=[
-	Format: words numbers for the panel: times, bytes, percentages, how long ago, and the verdict against the baseline
+	Format: words numbers for the panel: times, percentages, how long ago, and the verdict against the baseline
 
 	Return type: the Format module table
 	Example usage:
@@ -41,10 +41,6 @@ function Format.Time(Nanoseconds: number): string
 		return `{Grouped(Nanoseconds)} ns`
 	end
 	return string.format("%.1f ns", Nanoseconds)
-end
-
-function Format.Bytes(Bytes: number): string
-	return if Bytes >= 1024 then string.format("%.1f KB", Bytes / 1024) else `{math.round(Bytes)} B`
 end
 
 function Format.Percent(Fraction: number): string

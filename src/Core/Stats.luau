@@ -8,7 +8,7 @@
 
 	Return type: the Stats module table
 	Example usage:
-		local Summary = Stats.Summarize(Samples, BytesPerCall)
+		local Summary = Stats.Summarize(Samples)
 --]=]
 
 local Bench = require("../Bench")
@@ -46,7 +46,7 @@ local function MedianBounds(Ordered: { number }): (number, number)
 	return Ordered[LowRank], Ordered[HighRank]
 end
 
-function Stats.Summarize(Samples: { number }, Bytes: number): Stats
+function Stats.Summarize(Samples: { number }): Stats
 	assert(#Samples > 0, "Stats.summarize needs at least one sample; the runner returned none for this case")
 
 	local Ordered = Sorted(Samples)
@@ -68,7 +68,6 @@ function Stats.Summarize(Samples: { number }, Bytes: number): Stats
 		High = High,
 		Spread = if Median > 0 then (P90 - Ordered[1]) / Median else 0,
 		Samples = Samples,
-		Bytes = Bytes,
 	}
 end
 
