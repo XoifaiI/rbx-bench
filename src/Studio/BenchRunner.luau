@@ -3,13 +3,13 @@
 
 --[=[
 	BenchRunner: runs one bench from start to finish: load it, time every size, record its spans, work out the results
-	and store the run. A run that would take over ASK_FROM_SECONDS first asks Confirm for the round count to use, or
-	nil to cancel. It yields, so call it from its own thread. A run that is too noisy or fails a rule is rejected
-	and not stored
+	and store the run in History. A run that would take over ASK_FROM_SECONDS first asks Confirm for the round count
+	to use, or nil to cancel. It yields, so call it from its own thread. A run that is too noisy or fails a rule is
+	rejected and not stored. A failed or rejected run returns the reason as its second value
 
 	Return type: the BenchRunner module table
 	Example usage:
-		local Status, Detail = BenchRunner.Run(Entry, History, Rounds, Progress, Confirm)
+		local Status, Problem = BenchRunner.Run(Entry, History, Rounds, Progress, Confirm)
 --]=]
 
 local Bench = require("../Bench")
@@ -92,9 +92,9 @@ local function RecordSpans(
 
 		local Total = Calls[Index] * SPAN_BATCHES
 
-		Results.BeginPass(Suite.Recorder)
+		Results.StartPass(Suite.Recorder)
 		local Elapsed = Timing.Pass(Plan, Index, Total, os.clock)
-		Passes[Index] = Results.EndPass(Suite.Recorder, Total, Elapsed)
+		Passes[Index] = Results.StopPass(Suite.Recorder, Total, Elapsed)
 	end
 	return Passes
 end
@@ -144,13 +144,21 @@ local function MeasureSizes(
 		BeforeAll()
 	end
 
+	local function KeepCalibrating(_Fraction: number): boolean
+		return Progress(0)
+	end
+
 	local Plans: { Timing.Plan } = {}
 	local Calibrations: { Timing.Calibration } = {}
 	local RoundSeconds = 0
 	for Position, Size in Suite.SizeList do
 		Plans[Position] = PlanOf(Suite, Cases, Baseline, Size)
-		Calibrations[Position] = Timing.Calibrate(Plans[Position], Options, ENVIRONMENT)
-		RoundSeconds += Calibrations[Position].RoundSeconds * SECONDS_BESIDE_TIMING
+		local Calibration = Timing.Calibrate(Plans[Position], Options, ENVIRONMENT, KeepCalibrating)
+		if not Calibration then
+			return nil
+		end
+		Calibrations[Position] = Calibration
+		RoundSeconds += Calibration.RoundSeconds * SECONDS_BESIDE_TIMING
 	end
 
 	if RoundSeconds * Options.Rounds > ASK_FROM_SECONDS then
@@ -193,43 +201,45 @@ function BenchRunner.Run(
 	Rounds: number,
 	Progress: Progress,
 	Confirm: Confirm
-): (Status, RunHistory.RunRecord | string)
-	local Status, Loaded = BenchFolder.Load(Entry)
-	if Status == "failed" then
-		return "failed", Loaded :: string
+): (Status, string?)
+	local Loaded, Unloadable = BenchFolder.Load(Entry)
+	if not Loaded then
+		return "failed", Unloadable
 	end
 
 	local Options = table.clone(Timing.Defaults)
 	Options.Rounds = Rounds
 
-	local Suite = (Loaded :: BenchFolder.Loaded).Suite
+	local Suite = Loaded.Suite
 	local Succeeded, Sizes = xpcall(MeasureSizes, function(Problem: any): string
 		return debug.traceback(tostring(Problem), 2)
-	end, Suite, RunHistory.Get(History, Entry.Path), Options, Progress, Confirm)
+	end, Suite, History:Get(Entry.Path), Options, Progress, Confirm)
 
 	Suite.Recorder.Enabled = false
 
 	local AfterAll = Suite.Hooks.AfterAll
-	local Ended, Problem = true, nil :: any
+	local Ended, AfterAllProblem = true, nil :: any
 	if AfterAll then
-		Ended, Problem = pcall(AfterAll)
+		Ended, AfterAllProblem = pcall(AfterAll)
 	end
-	BenchFolder.Release(Loaded :: BenchFolder.Loaded)
+	BenchFolder.Release(Loaded)
 
 	if not Succeeded then
-		return "failed", Sizes :: any
+		return "failed", tostring(Sizes)
 	end
 	if not Ended then
-		return "failed", `afterAll failed: {Problem}`
+		return "failed", `AfterAll failed: {AfterAllProblem}`
 	end
 	if not Sizes then
-		return "cancelled", ""
+		return "cancelled", nil
 	end
 	local Rejected = Rejections(Sizes)
 	if Rejected then
 		return "rejected", Rejected
 	end
-	return "finished", RunHistory.Add(History, Entry.Path, Sizes)
+
+	History:Add(Entry.Path, Sizes)
+	return "finished", nil
 end
 
 return BenchRunner

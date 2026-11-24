@@ -1,5 +1,14 @@
 --!strict
---- The bench list: a filter box, a button that creates a bench, and one row per bench with its own run button.
+--!optimize 2
+
+--[=[
+	BenchList: the bench list: a filter box, a button that creates a bench, and one row per bench with its own run
+	button
+
+	Return type: the BenchList component
+	Example usage:
+		BenchList({ state = state, size = UDim2.new(0, 240, 1, 0) })
+--]=]
 
 local Flux = require("../../Packages/Flux")
 local Components = require("../Components")

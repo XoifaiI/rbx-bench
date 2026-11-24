@@ -1,5 +1,14 @@
 --!strict
---- Where the interface meets the logic: the signals every view reads and the actions that call the Studio layer.
+--!optimize 2
+
+--[=[
+	State: where the interface meets the logic: the signals every view reads and the actions that call the Studio
+	layer. The UI files use camelCase, the casing of Flux's own API
+
+	Return type: the State module table
+	Example usage:
+		local state = State.new(services)
+--]=]
 
 local Flux = require("../Packages/Flux")
 local RunHistory = require("../Studio/RunHistory")
@@ -95,7 +104,7 @@ function State.new(services: Services.Services): State
 	end
 
 	local function showStored(path: string)
-		local stored = RunHistory.Get(services.History, path)
+		local stored = services.History:Get(path)
 		runs(table.clone(stored))
 		runIndex(#stored)
 	end
@@ -143,7 +152,7 @@ function State.new(services: Services.Services): State
 		message("")
 
 		task.spawn(function()
-			local status, detail = BenchRunner.Run(entry, services.History, rounds:peek(), function(fraction: number)
+			local status, problem = BenchRunner.Run(entry, services.History, rounds:peek(), function(fraction: number)
 				progress(fraction)
 				return not control.cancelRequested
 			end, function(secondsPerRound: number, wanted: number): number?
@@ -155,8 +164,8 @@ function State.new(services: Services.Services): State
 			running(false)
 			if status == "finished" then
 				showStored(entry.Path)
-			elseif status == "failed" or status == "rejected" then
-				message(detail :: string)
+			elseif problem then
+				message(problem)
 			end
 		end)
 	end
@@ -180,7 +189,7 @@ function State.new(services: Services.Services): State
 	local function clear()
 		local entry = selectedEntry()
 		if entry then
-			RunHistory.Clear(services.History, entry.Path)
+			services.History:Clear(entry.Path)
 			showStored(entry.Path)
 		end
 	end
@@ -202,7 +211,7 @@ function State.new(services: Services.Services): State
 	end
 
 	local function setRounds(wanted: number)
-		rounds(Preferences.SetRounds(services.Preferences, wanted))
+		rounds(services.Preferences:SetRounds(wanted))
 	end
 
 	refresh()

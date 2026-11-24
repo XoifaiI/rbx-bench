@@ -1,6 +1,14 @@
 --!strict
---- The dialog that asks before a long run: how long it will take at the round count typed into its field, with a
---- button to cancel and one to continue with that count. The count applies to this run only.
+--!optimize 2
+
+--[=[
+	RunDialog: the dialog that asks before a long run: how long it will take at the round count typed into its field,
+	with a button to cancel and one to continue with that count. The count applies to this run only
+
+	Return type: the RunDialog component
+	Example usage:
+		RunDialog({ state = state })
+--]=]
 
 local Flux = require("../../Packages/Flux")
 local Components = require("../Components")

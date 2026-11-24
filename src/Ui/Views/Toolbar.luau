@@ -1,6 +1,14 @@
 --!strict
---- The top bar: run or cancel, the round count, the selected bench, a button per input size, and the run strip.
---- A compact bar drops when the bench last ran and the strip's bars, so it fits a narrow panel.
+--!optimize 2
+
+--[=[
+	Toolbar: the top bar: run or cancel, the round count, the selected bench, a button per input size, and the run
+	strip. A compact bar drops when the bench last ran and the strip's bars, so it fits a narrow panel
+
+	Return type: the Toolbar component
+	Example usage:
+		Toolbar({ state = state, isCompact = isCompact })
+--]=]
 
 local Flux = require("../../Packages/Flux")
 local Components = require("../Components")

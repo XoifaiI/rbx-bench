@@ -1,6 +1,14 @@
 --!strict
---- The panel: toolbar, bench list, chart, progress line, failure message and hover card. `mount` puts it into a
---- ScreenGui or plugin widget and returns the unmount.
+--!optimize 2
+
+--[=[
+	App: the panel: toolbar, bench list, chart, progress line, failure message and hover card. `mount` puts it into a
+	ScreenGui or plugin widget and returns the unmount
+
+	Return type: the App module table
+	Example usage:
+		local unmount = App.mount(widget, state, isDark)
+--]=]
 
 local Flux = require("../Packages/Flux")
 local BenchList = require("./Views/BenchList")

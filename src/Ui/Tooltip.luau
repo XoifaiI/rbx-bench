@@ -1,7 +1,17 @@
 --!strict
---- The hover card: follows the pointer and shows what the innermost attached object under it says about itself.
---- `attach` asks the object once when the pointer enters it; `track` asks again every time the pointer moves.
---- The card is kept inside the panel from top to bottom.
+--!optimize 2
+
+--[=[
+	Tooltip: the hover card: follows the pointer and shows what the innermost attached object under it says about
+	itself. `attach` asks the object once when the pointer enters it; `track` asks again every time the pointer moves.
+	The card is kept inside the panel from top to bottom
+
+	Return type: the Tooltip module table
+	Example usage:
+		Tooltip.attach(frame, 1, function()
+			return { title = "Case", lines = {} }
+		end)
+--]=]
 
 local Flux = require("../Packages/Flux")
 local Components = require("./Components")

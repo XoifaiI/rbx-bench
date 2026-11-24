@@ -4,7 +4,9 @@
 --[=[
 	Results: turns one size's measurement into its result record: statistics and a verdict per case, span shares,
 	metric values and rule results. It also decides when a run is too noisy to keep. A case's spans are listed
-	parent before child, in the order each first ran, with Depth 1 for a span that ran inside no other
+	parent before child, in the order each first ran, with Depth 1 for a span that ran inside no other. A case's
+	output matches the baseline's when they are equal, both NaN, buffers of the same bytes, or tables whose keys
+	and values match in turn; tables that refer back to themselves compare without looping
 
 	Return type: the Results module table
 	Example usage:
@@ -15,7 +17,7 @@ local Bench = require("../Bench")
 local Timing = require("./Timing")
 local Stats = require("./Stats")
 
-export type Kind = "baseline" | "faster" | "slower" | "tie"
+export type Verdict = "baseline" | "faster" | "slower" | "tie"
 
 export type SpanPass = {
 	Parents: { number },
@@ -41,7 +43,7 @@ export type MetricRecord = {
 
 export type CaseRecord = {
 	Name: string,
-	Kind: Kind,
+	Verdict: Verdict,
 	Ratio: number,
 	MatchesBaseline: boolean,
 	Stats: Bench.Stats,
@@ -70,6 +72,7 @@ export type SizeRecord = {
 
 type Case = Bench.Case<any>
 type Reads = { [string]: boolean }
+type Compared = { [any]: { [any]: boolean } }
 
 local HISTOGRAM_BINS = 120
 local TAIL_SHOWN = 0.25
@@ -101,12 +104,15 @@ function Results.CaseNamed(Record: SizeRecord, Name: string): CaseRecord?
 	return nil
 end
 
-local function SameOutput(First: any, Second: any): boolean
+local function SameOutput(First: any, Second: any, Compared: Compared): boolean
 	if First == Second then
 		return true
 	end
 	if type(First) ~= type(Second) then
 		return false
+	end
+	if type(First) == "number" then
+		return First ~= First and Second ~= Second
 	end
 	if type(First) == "buffer" then
 		return buffer.tostring(First) == buffer.tostring(Second)
@@ -115,8 +121,18 @@ local function SameOutput(First: any, Second: any): boolean
 		return false
 	end
 
+	local Against = Compared[First]
+	if not Against then
+		Against = {}
+		Compared[First] = Against
+	end
+	if Against[Second] then
+		return true
+	end
+	Against[Second] = true
+
 	for Key, Value in First do
-		if not SameOutput(Value, Second[Key]) then
+		if not SameOutput(Value, Second[Key], Compared) then
 			return false
 		end
 	end
@@ -215,7 +231,7 @@ local function ReadNames(Reads: Reads): { string }
 	return Names
 end
 
-function Results.BeginPass(Recorder: Bench.Recorder)
+function Results.StartPass(Recorder: Bench.Recorder)
 	Recorder.Current = ROOT_NODE
 	Recorder.Parents = { ROOT_NODE }
 	Recorder.Spans = { 0 }
@@ -225,7 +241,7 @@ function Results.BeginPass(Recorder: Bench.Recorder)
 	Recorder.Enabled = true
 end
 
-function Results.EndPass(Recorder: Bench.Recorder, Calls: number, Elapsed: number): SpanPass
+function Results.StopPass(Recorder: Bench.Recorder, Calls: number, Elapsed: number): SpanPass
 	Recorder.Enabled = false
 	return {
 		Parents = Recorder.Parents,
@@ -288,19 +304,19 @@ function Results.Judge(
 		local Samples = Measurement.Samples[Index]
 		local Summary = Summaries[Index]
 
-		local Kind: Kind = "baseline"
+		local Verdict: Verdict = "baseline"
 		local Ratio = 1
 		if Index ~= Baseline then
 			local Comparison = Stats.Compare(Samples, Measurement.Samples[Baseline], Noise)
 			Ratio = Comparison.Ratio
-			Kind = if not Comparison.Significant then "tie" elseif Ratio < 1 then "faster" else "slower"
+			Verdict = if not Comparison.Significant then "tie" elseif Ratio < 1 then "faster" else "slower"
 		end
 
 		Record.Cases[Index] = {
 			Name = Case.Name,
-			Kind = Kind,
+			Verdict = Verdict,
 			Ratio = Ratio,
-			MatchesBaseline = SameOutput(Measurement.Outputs[Index], Measurement.Outputs[Baseline]),
+			MatchesBaseline = SameOutput(Measurement.Outputs[Index], Measurement.Outputs[Baseline], {}),
 			Stats = Summary,
 			Histogram = Stats.Histogram(Samples, Fastest or 0, SlowestShown, HISTOGRAM_BINS),
 			Spans = SpanRecords(Suite, SpanPasses[Index], Summary.Median),

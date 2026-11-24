@@ -5,7 +5,7 @@
 	CreateInstance: builds one Instance from its class name and a table of properties, typed off the class name so a
 	wrong property or value is a type error. Instances lists only the classes this plugin creates
 
-	Return type: frozen table { Create }
+	Return type: the CreateInstance module table
 	Example usage:
 		local Folder = CreateInstance.Create("Folder", { Name = "Benches", Parent = ServerStorage })
 --]=]
@@ -20,17 +20,17 @@ type Instances = {
 	StyleLink: StyleLink,
 }
 
-type function ExportProperties(Class)
+type function ExportProperties(Class: type): type
 	if not Class:is("singleton") then
-		error(`expected a class name singleton, got: {Class.tag}`)
+		return types.never
 	end
 
 	local RobloxClass = Instances:readproperty(Class)
 	if not RobloxClass then
-		error(`no class called '{Class:value()}' exists`)
+		return types.never
 	end
 
-	local function IsCallable(Value)
+	local function IsCallable(Value: type): boolean
 		if Value:is("function") then
 			return true
 		end
@@ -62,22 +62,19 @@ type function ExportProperties(Class)
 	return types.newtable(Properties)
 end
 
-type function ToClass(Class)
+type function ToClass(Class: type): type
 	if not Class:is("singleton") then
-		error(`expected a class name singleton, got: {Class.tag}`)
+		return types.never
 	end
 
-	local RobloxClass = Instances:readproperty(Class)
-	if not RobloxClass then
-		error(`no class called '{Class:value()}' exists`)
-	end
-
-	return RobloxClass
+	return Instances:readproperty(Class) or types.never
 end
 
 type ClassNames = keyof<Instances>
 
-local function Create<T>(ClassName: ClassNames & T, Properties: ExportProperties<T>?): ToClass<T>
+local CreateInstance = {}
+
+function CreateInstance.Create<T>(ClassName: ClassNames & T, Properties: ExportProperties<T>?): ToClass<T>
 	local Object: Instance = Instance.new(ClassName :: any)
 
 	if Properties then
@@ -89,6 +86,4 @@ local function Create<T>(ClassName: ClassNames & T, Properties: ExportProperties
 	return Object :: any
 end
 
-return table.freeze({
-	Create = Create,
-})
+return CreateInstance

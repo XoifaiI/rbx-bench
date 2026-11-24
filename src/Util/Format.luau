@@ -58,10 +58,10 @@ function Format.Ago(Seconds: number): string
 	return `{Seconds // 86400} d ago`
 end
 
-function Format.Verdict(Kind: Results.Kind, Ratio: number): string
-	if Kind == "baseline" or Kind == "tie" then
-		return Kind
-	elseif Kind == "faster" then
+function Format.Verdict(Verdict: Results.Verdict, Ratio: number): string
+	if Verdict == "baseline" or Verdict == "tie" then
+		return Verdict
+	elseif Verdict == "faster" then
 		return `{Format.Percent(1 - Ratio)} faster`
 	elseif Ratio >= 2 then
 		return string.format("%.2fx slower", Ratio)

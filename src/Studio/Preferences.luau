@@ -4,24 +4,34 @@
 --[=[
 	Preferences: the round count the plugin remembers between sessions, kept between FEWEST_ROUNDS and MOST_ROUNDS
 
-	Return type: the Preferences module table
+	Return type: the Preferences class
 	Example usage:
 		local Kept = Preferences.New(plugin)
-		Preferences.SetRounds(Kept, 1000)
+		Kept:SetRounds(1000)
 --]=]
 
 local Timing = require("../Core/Timing")
 
-export type Preferences = {
+type PreferencesImpl = {
+	__index: PreferencesImpl,
+	Kept: (Wanted: number) -> number,
+	New: (Plugin: Plugin?) -> Preferences,
+	SetRounds: (self: Preferences, Wanted: number) -> number,
+}
+
+type PreferencesData = {
 	Plugin: Plugin?,
 	Rounds: number,
 }
+
+export type Preferences = setmetatable<PreferencesData, PreferencesImpl>
 
 local ROUNDS_SETTING = "rounds"
 local FEWEST_ROUNDS = 20
 local MOST_ROUNDS = 10_000
 
-local Preferences = {}
+local Preferences = {} :: PreferencesImpl
+Preferences.__index = Preferences
 
 function Preferences.Kept(Wanted: number): number
 	if Wanted ~= Wanted then
@@ -38,13 +48,17 @@ function Preferences.New(Plugin: Plugin?): Preferences
 			Rounds = Preferences.Kept(Stored)
 		end
 	end
-	return { Plugin = Plugin, Rounds = Rounds }
+
+	local Data: PreferencesData = { Plugin = Plugin, Rounds = Rounds }
+	return setmetatable(Data, Preferences) :: Preferences
 end
 
 function Preferences.SetRounds(self: Preferences, Wanted: number): number
 	self.Rounds = Preferences.Kept(Wanted)
-	if self.Plugin then
-		local WasStored, Problem = pcall(self.Plugin.SetSetting, self.Plugin, ROUNDS_SETTING, self.Rounds)
+
+	local Plugin = self.Plugin
+	if Plugin then
+		local WasStored, Problem = pcall(Plugin.SetSetting, Plugin, ROUNDS_SETTING, self.Rounds)
 		if not WasStored then
 			warn(
 				`[rbx-bench] could not save the round count, so it will be back to the old one after a restart: {Problem}`

@@ -1,6 +1,15 @@
 --!strict
---- Everything the panel looks like, as one Roblox StyleSheet: color tokens, and rules that apply them by tag. Views set
---- no color except a case's own, which they ask for here. `claim` must run before anything is created.
+--!optimize 2
+
+--[=[
+	Style: everything the panel looks like, as one Roblox StyleSheet: color tokens, and rules that apply them by tag.
+	Views set no color except a case's own, which they ask for here. `claim` must run before anything is created
+
+	Return type: the Style module table
+	Example usage:
+		Style.claim()
+		Style.mount(widget, isDark)
+--]=]
 
 local Flux = require("../Packages/Flux")
 local CreateInstance = require("../Studio/CreateInstance")

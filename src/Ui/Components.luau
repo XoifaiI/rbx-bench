@@ -1,10 +1,20 @@
 --!strict
---- The panel's building blocks. They set size and layout and name themselves to the style sheet with tags.
+--!optimize 2
+
+--[=[
+	Components: the panel's building blocks. They set size and layout and name themselves to the style sheet with tags
+
+	Return type: the Components module table
+	Example usage:
+		Components.Button({ text = "Run", accent = true, onClick = state.run })
+--]=]
 
 local Flux = require("../Packages/Flux")
 local Layout = require("./Layout")
 
 local new = Flux.new
+
+local Components = {}
 
 export type Tone = "Accent" | "Good" | "Bad" | "Neutral"
 
@@ -18,7 +28,7 @@ local TEXT_OWN = {
 
 type TextProps = Flux.Props<"TextLabel", typeof(TEXT_OWN)>
 
-local function Text(props: TextProps): TextLabel
+function Components.Text(props: TextProps): TextLabel
 	local own, rest = Flux.split(props, TEXT_OWN)
 
 	local tags: { Flux.Reactive<string?> } = { "Text" }
@@ -45,7 +55,7 @@ local BUTTON_OWN = {
 
 type ButtonProps = Flux.Props<"TextButton", typeof(BUTTON_OWN)>
 
-local function Button(props: ButtonProps): TextButton
+function Components.Button(props: ButtonProps): TextButton
 	local own, rest = Flux.split(props, BUTTON_OWN)
 	local enabled = Flux.fallback(own.enabled, true)
 
@@ -80,7 +90,7 @@ local function Button(props: ButtonProps): TextButton
 	})(rest)
 end
 
-local function Badge(props: { text: Flux.Reactive<string>, tone: () -> Tone }): TextLabel
+function Components.Badge(props: { text: Flux.Reactive<string>, tone: () -> Tone }): TextLabel
 	return new "TextLabel" {
 		AutomaticSize = Enum.AutomaticSize.X,
 		Size = UDim2.fromOffset(0, BADGE_HEIGHT),
@@ -97,14 +107,14 @@ local function Badge(props: { text: Flux.Reactive<string>, tone: () -> Tone }): 
 	}
 end
 
-local function Card(props: Flux.Props<"Frame">): Frame
+function Components.Card(props: Flux.Props<"Frame">): Frame
 	return Flux.edit(new "Frame" {
 		__TAG = { "Card" },
 		Flux.padding(Layout.Inset),
 	})(props)
 end
 
-local function Scroller(props: Flux.Props<"ScrollingFrame">): ScrollingFrame
+function Components.Scroller(props: Flux.Props<"ScrollingFrame">): ScrollingFrame
 	return Flux.edit(new "ScrollingFrame" {
 		CanvasSize = UDim2.new(),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
@@ -112,10 +122,4 @@ local function Scroller(props: Flux.Props<"ScrollingFrame">): ScrollingFrame
 	})(props)
 end
 
-return {
-	Text = Text,
-	Button = Button,
-	Badge = Badge,
-	Card = Card,
-	Scroller = Scroller,
-}
+return Components

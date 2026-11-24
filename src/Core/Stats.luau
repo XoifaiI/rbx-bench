@@ -47,7 +47,7 @@ local function MedianBounds(Ordered: { number }): (number, number)
 end
 
 function Stats.Summarize(Samples: { number }): Stats
-	assert(#Samples > 0, "Stats.summarize needs at least one sample; the runner returned none for this case")
+	assert(#Samples > 0, "Stats.Summarize needs at least one sample; the runner returned none for this case")
 
 	local Ordered = Sorted(Samples)
 	local Total = 0
@@ -72,7 +72,7 @@ function Stats.Summarize(Samples: { number }): Stats
 end
 
 function Stats.Compare(First: { number }, Second: { number }, Noise: number): Comparison
-	assert(#First == #Second and #First > 0, "Stats.compare needs the same number of rounds for both cases")
+	assert(#First == #Second and #First > 0, "Stats.Compare needs the same number of rounds for both cases")
 
 	local Ratios = table.create(#First, 0)
 	for Round = 1, #First do

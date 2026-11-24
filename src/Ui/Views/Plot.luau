@@ -1,7 +1,15 @@
 --!strict
---- The plot area of the chart, drawn as pixels by PlotPixels and shown through EditableImage tiles of at most 1024
---- pixels a side. Hovering it names the cases with samples in the time bin under the pointer, the curve nearest the
---- pointer first.
+--!optimize 2
+
+--[=[
+	Plot: the plot area of the chart, drawn as pixels by PlotPixels and shown through EditableImage tiles of at
+	most 1024 pixels a side. A plot that fits in one tile is drawn straight into that tile's pixels. Hovering it
+	names the cases with samples in the time bin under the pointer, the curve nearest the pointer first
+
+	Return type: the Plot component
+	Example usage:
+		Plot({ rows = shownRows, top = top })
+--]=]
 
 local AssetService = game:GetService("AssetService")
 
@@ -66,6 +74,7 @@ local function resize(canvas: Canvas, holder: Frame, width: number, height: numb
 
 	local count = math.ceil(width / LONGEST_SIDE)
 	local widest = math.ceil(width / count)
+	local isWhole = count == 1
 	for index = 1, count do
 		local x = (index - 1) * widest
 		local tileWidth = math.min(widest, width - x)
@@ -87,7 +96,7 @@ local function resize(canvas: Canvas, holder: Frame, width: number, height: numb
 		table.insert(canvas.tiles, {
 			x = x,
 			width = tileWidth,
-			pixels = buffer.create(tileWidth * height * 4),
+			pixels = if isWhole then canvas.pixels else buffer.create(tileWidth * height * 4),
 			image = image,
 			label = label,
 		})
@@ -217,7 +226,9 @@ local function Plot(props: { rows: Flux.Node<{ Row }>, top: Flux.Node<number> })
 		})
 
 		for _, tile in canvas.tiles do
-			PlotPixels.Split(tile.pixels, canvas.pixels, width, height, tile.x, tile.width)
+			if tile.pixels ~= canvas.pixels then
+				PlotPixels.Split(tile.pixels, canvas.pixels, width, height, tile.x, tile.width)
+			end
 			tile.image:WritePixelsBuffer(Vector2.zero, Vector2.new(tile.width, height), tile.pixels)
 		end
 	end)

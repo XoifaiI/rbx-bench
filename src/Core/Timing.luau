@@ -4,12 +4,13 @@
 
 --[=[
 	Timing: times a set of functions against each other in rounds of batched calls. Every round runs them in a newly
-	shuffled order, because a function's time depends on what ran just before it. Calibrate sizes the batches and says how long one round will take. Samples are nanoseconds per
-	call with call overhead removed. Measure returns nil when Progress answers false
+	shuffled order, because a function's time depends on what ran just before it. Calibrate sizes the batches and
+	says how long one round will take. Samples are nanoseconds per call with call overhead removed. Both yield once
+	a frame's worth of work has run, asking Progress first, and return nil when Progress answers false
 
 	Return type: the Timing module table
 	Example usage:
-		local Calibration = Timing.Calibrate(Plan, Timing.Defaults, Environment)
+		local Calibration = Timing.Calibrate(Plan, Timing.Defaults, Environment, Progress)
 		local Measurement = Timing.Measure(Plan, Calibration, Timing.Defaults, Environment, Progress)
 --]=]
 
@@ -57,14 +58,16 @@ local SHUFFLE_SEED = 20261122
 local SHUFFLE_MULTIPLIER = 48271
 local SHUFFLE_MODULUS = 2147483647
 
-local Timing = {}
-
-Timing.Defaults = {
+local DEFAULTS: Options = {
 	Rounds = 300,
 	BatchSeconds = 120e-6,
 	WarmSeconds = 300e-6,
 	FrameSeconds = 16e-3,
-} :: Options
+}
+
+local Timing = {
+	Defaults = DEFAULTS,
+}
 
 local function Nothing(_Input: any): any
 	return nil
@@ -160,7 +163,12 @@ local function SlotsOf(Plan: Plan): ({ Timed }, { number })
 	return Timed, Owners
 end
 
-function Timing.Calibrate(Plan: Plan, Options: Options, Environment: Environment): Calibration
+function Timing.Calibrate(
+	Plan: Plan,
+	Options: Options,
+	Environment: Environment,
+	Progress: (Fraction: number) -> boolean
+): Calibration?
 	local Clock = Environment.Clock
 	local Count = #Plan.Runs
 	local EmptySlot = Count + 2
@@ -171,7 +179,16 @@ function Timing.Calibrate(Plan: Plan, Options: Options, Environment: Environment
 	local Calls = table.create(EmptySlot, 0)
 	local Outputs: { any } = {}
 	local RoundSeconds = 0
+	local LastYield = Clock()
 	for Slot = 1, EmptySlot do
+		if Clock() - LastYield > Options.FrameSeconds then
+			if not Progress((Slot - 1) / EmptySlot) then
+				return nil
+			end
+			Environment.Yield()
+			LastYield = Clock()
+		end
+
 		if Slot <= Count then
 			Outputs[Slot] = OutputOf(Plan, Slot)
 		end
@@ -220,7 +237,7 @@ function Timing.Measure(
 	end
 
 	local EmptyEvery = math.max(Options.Rounds // EMPTY_SAMPLES, 1)
-	local Overhead = math.huge
+	local Overhead: number? = nil
 
 	local Order = table.create(ControlSlot, 0)
 	for Slot = 1, ControlSlot do
@@ -255,13 +272,15 @@ function Timing.Measure(
 		end
 
 		if Round % EmptyEvery == 0 then
-			Overhead = math.min(Overhead, Batch(EmptySlot, Calls[EmptySlot]) / Calls[EmptySlot] * 1e9)
+			local Empty = Batch(EmptySlot, Calls[EmptySlot]) / Calls[EmptySlot] * 1e9
+			Overhead = if Overhead then math.min(Overhead, Empty) else Empty
 		end
 	end
 
+	local Removed = Overhead or 0
 	for Slot = 1, ControlSlot do
 		for Round, Sample in Samples[Slot] do
-			Samples[Slot][Round] = math.max(Sample - Overhead, 0)
+			Samples[Slot][Round] = math.max(Sample - Removed, 0)
 		end
 	end
 

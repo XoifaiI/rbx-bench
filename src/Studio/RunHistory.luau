@@ -3,12 +3,13 @@
 
 --[=[
 	RunHistory: keeps the last KEPT_RUNS runs of each bench and saves them to the plugin's settings, per place, packed
-	by RunFormat and compressed. Only the newest run keeps its samples
+	by RunFormat and compressed. Only the newest run keeps its samples. A save over STORED_BUDGET drops the oldest
+	runs from memory too, so memory holds what a restart brings back
 
-	Return type: the RunHistory module table
+	Return type: the RunHistory class
 	Example usage:
 		local History = RunHistory.New(plugin)
-		local Runs = RunHistory.Get(History, "sha256")
+		local Runs = History:Get("sha256")
 --]=]
 
 local EncodingService = game:GetService("EncodingService")
@@ -18,10 +19,20 @@ local Results = require("../Core/Results")
 
 export type RunRecord = RunFormat.RunRecord
 
-export type RunHistory = {
+type RunHistoryImpl = {
+	__index: RunHistoryImpl,
+	New: (Plugin: Plugin?) -> RunHistory,
+	Get: (self: RunHistory, Key: string) -> { RunRecord },
+	Add: (self: RunHistory, Key: string, Sizes: { Results.SizeRecord }) -> RunRecord,
+	Clear: (self: RunHistory, Key: string) -> (),
+}
+
+type RunHistoryData = {
 	Plugin: Plugin?,
 	Runs: { [string]: { RunRecord } },
 }
+
+export type RunHistory = setmetatable<RunHistoryData, RunHistoryImpl>
 
 local KEPT_RUNS = 30
 local STORED_BUDGET = 2 * 2 ^ 20
@@ -31,7 +42,8 @@ local UNPUBLISHED_PLACE = "unpublished"
 
 local Zstd = Enum.CompressionAlgorithm.Zstd
 
-local RunHistory = {}
+local RunHistory = {} :: RunHistoryImpl
+RunHistory.__index = RunHistory
 
 local function SettingKey(Key: string): string
 	local Place = if game.PlaceId == 0 then UNPUBLISHED_PLACE else tostring(game.PlaceId)
@@ -43,7 +55,7 @@ local function Pack(Runs: { RunRecord }): string
 	return buffer.tostring(EncodingService:Base64Encode(Compressed))
 end
 
-local function unpack(Stored: string): (RunFormat.Outcome, { RunRecord })
+local function Unpack(Stored: string): (RunFormat.Outcome, { RunRecord })
 	local Compressed = EncodingService:Base64Decode(buffer.fromstring(Stored))
 	if EncodingService:GetDecompressedBufferSize(Compressed, Zstd) == nil then
 		return "damaged", {}
@@ -61,15 +73,22 @@ local function Restore(Plugin: Plugin, Key: string): { RunRecord }
 		return {}
 	end
 
-	local WasUnpacked, Outcome, Runs = pcall(unpack, Stored)
+	local WasUnpacked, Outcome, Runs = pcall(Unpack, Stored)
 	if not WasUnpacked or Outcome == "damaged" then
 		warn(`[rbx-bench] the saved runs of {Key} are damaged, so it starts with none and the next run replaces them`)
+		return {}
+	end
+	if Outcome == "unsupported" then
+		warn(
+			`[rbx-bench] the saved runs of {Key} were made by a newer rbx-bench, so it starts with none and the next `
+				.. `run replaces them; update the plugin to keep them`
+		)
 		return {}
 	end
 	return Runs
 end
 
-local function PackWithinBudget(Runs: { RunRecord }): string?
+local function PackDroppingOldest(Runs: { RunRecord }): string?
 	local Stored = Pack(Runs)
 	while #Stored > STORED_BUDGET do
 		if #Runs == 1 then
@@ -86,7 +105,7 @@ local function PackWithinBudget(Runs: { RunRecord }): string?
 end
 
 local function Store(Plugin: Plugin, Key: string, Runs: { RunRecord })
-	local Stored = PackWithinBudget(Runs)
+	local Stored = PackDroppingOldest(Runs)
 	if not Stored then
 		warn(`[rbx-bench] one run of {Key} is too large to save, so its runs will be gone after a restart`)
 	end
@@ -102,7 +121,8 @@ local function DropSamples(Run: RunRecord)
 end
 
 function RunHistory.New(Plugin: Plugin?): RunHistory
-	return { Plugin = Plugin, Runs = {} }
+	local Data: RunHistoryData = { Plugin = Plugin, Runs = {} }
+	return setmetatable(Data, RunHistory) :: RunHistory
 end
 
 function RunHistory.Get(self: RunHistory, Key: string): { RunRecord }
@@ -117,7 +137,7 @@ function RunHistory.Get(self: RunHistory, Key: string): { RunRecord }
 end
 
 function RunHistory.Add(self: RunHistory, Key: string, Sizes: { Results.SizeRecord }): RunRecord
-	local Runs = RunHistory.Get(self, Key)
+	local Runs = self:Get(Key)
 	local Last = Runs[#Runs]
 
 	local Run: RunRecord = {
@@ -150,10 +170,11 @@ function RunHistory.Add(self: RunHistory, Key: string, Sizes: { Results.SizeReco
 	return Run
 end
 
-function RunHistory.Clear(self: RunHistory, Key: string)
+function RunHistory.Clear(self: RunHistory, Key: string): ()
 	self.Runs[Key] = {}
-	if self.Plugin then
-		local WasCleared, Problem = pcall(self.Plugin.SetSetting, self.Plugin, SettingKey(Key), nil)
+	local Plugin = self.Plugin
+	if Plugin then
+		local WasCleared, Problem = pcall(Plugin.SetSetting, Plugin, SettingKey(Key), nil)
 		if not WasCleared then
 			warn(
 				`[rbx-bench] could not remove the saved runs of {Key}, so they will be back after a restart: {Problem}`

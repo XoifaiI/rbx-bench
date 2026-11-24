@@ -1,7 +1,15 @@
 --!strict
---- The cases of the size on show, fastest first, the flame graph of a case's spans, and what the hover card says about
---- a case, one span or one time bin. A span starts where the span before it at its depth ended, and its first child
---- starts where it does, so the order is the order they first ran and the gaps are time outside any span.
+--!optimize 2
+
+--[=[
+	CaseRows: the cases of the size on show, fastest first, the flame graph of a case's spans, and what the hover card
+	says about a case, one span or one time bin. A span starts where the span before it at its depth ended, and its
+	first child starts where it does, so the order is the order they first ran and the gaps are time outside any span
+
+	Return type: the CaseRows module table
+	Example usage:
+		local rows = CaseRows.ranked(state)
+--]=]
 
 local Flux = require("../Packages/Flux")
 local Format = require("../Util/Format")
@@ -93,7 +101,7 @@ function CaseRows.describe(row: Row): Tooltip.Content
 	local stats = case.Stats
 	local lines: { Tooltip.Line } = {
 		{ label = "Median per call", value = Format.Time(stats.Median) },
-		{ label = "Against baseline", value = Format.Verdict(case.Kind, case.Ratio) },
+		{ label = "Against baseline", value = Format.Verdict(case.Verdict, case.Ratio) },
 		{ label = "Fastest", value = Format.Time(stats.Min) },
 		{ label = "90th percentile", value = Format.Time(stats.P90) },
 		{ label = "Spread", value = Format.Percent(stats.Spread) },

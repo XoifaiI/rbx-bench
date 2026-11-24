@@ -1,10 +1,18 @@
 --!strict
---- The chart card: the distribution plot and, under it, one bar per case as long as its median. A bar starts from
---- zero, with the slowest case reaching LONGEST_REACH of the width, so the bars are not on the plot's time axis,
---- which starts at the fastest sample. A case that ran spans has their flame graph under its bar, one line per
---- depth, as wide as the bar; a span too narrow for its name is listed beside the flame graph with a chip of its
---- color. A case's label goes inside its bar or after it, wherever it fits, and drops its badge when neither side
---- has room for both. Picking a bar shows that case's curve alone.
+--!optimize 2
+
+--[=[
+	Chart: the chart card: the distribution plot and, under it, one bar per case as long as its median. A bar starts
+	from zero, with the slowest case reaching LONGEST_REACH of the width, so the bars are not on the plot's time axis,
+	which starts at the fastest sample. A case that ran spans has their flame graph under its bar, one line per depth,
+	as wide as the bar; a span too narrow for its name is listed beside the flame graph with a chip of its color. A
+	case's label goes inside its bar or after it, wherever it fits, and drops its badge when neither side has room for
+	both. Picking a bar shows that case's curve alone
+
+	Return type: the Chart component
+	Example usage:
+		Chart({ state = state, rows = rows, size = UDim2.fromScale(1, 1) })
+--]=]
 
 local Flux = require("../../Packages/Flux")
 local Components = require("../Components")
@@ -67,7 +75,7 @@ local SHORTEST_REACH = 0.004
 local LONGEST_REACH = 0.8
 local NARROWEST_RANGE = 1e-9
 
-local TONE: { [Results.Kind]: Components.Tone } = {
+local TONE: { [Results.Verdict]: Components.Tone } = {
 	baseline = "Accent",
 	faster = "Good",
 	slower = "Bad",
@@ -261,7 +269,7 @@ local function MedianBar(props: {
 	local captionSize = Flux.property(caption, "AbsoluteSize")
 
 	local function verdict(): string
-		return Format.Verdict(row().case.Kind, row().case.Ratio)
+		return Format.Verdict(row().case.Verdict, row().case.Ratio)
 	end
 
 	local function fit(): (Placement, boolean)
@@ -370,7 +378,7 @@ local function MedianBar(props: {
 			Flux.edit(Components.Badge({
 				text = verdict,
 				tone = function()
-					return TONE[row().case.Kind]
+					return TONE[row().case.Verdict]
 				end,
 			})) {
 				Visible = showsBadge,

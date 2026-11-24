@@ -1,6 +1,14 @@
 --!strict
---- Puts the panel into the plugin's dock widget: its state, the Studio theme, a refresh whenever the widget is shown
---- and, in a dev build, the `Debug` BindableFunction that drives the panel from outside. Returns the undock.
+--!optimize 2
+
+--[=[
+	Dock: Puts the panel into the plugin's dock widget: its state, the Studio theme, a refresh whenever the widget is shown
+	and, in a dev build, the `Debug` BindableFunction that drives the panel from outside. Returns the undock
+
+	Return type: the Dock function
+	Example usage:
+		local Undock = Dock(Widget, Services.New(plugin, BenchSource), IsDev)
+--]=]
 
 local Flux = require("../Packages/Flux")
 local App = require("./App")

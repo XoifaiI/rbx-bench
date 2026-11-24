@@ -10,7 +10,7 @@
 	Return type: the BenchFolder module table
 	Example usage:
 		local Entries = BenchFolder.List()
-		local Status, Loaded = BenchFolder.Load(Entries[1])
+		local Loaded, Problem = BenchFolder.Load(Entries[1])
 --]=]
 
 local Bench = require("../Bench")
@@ -62,7 +62,7 @@ local function IsDisabled(Path: string): boolean
 	return string.find(`{Path}.`, `{DISABLED_SUFFIX}.`, 1, true) ~= nil
 end
 
-local function TwinOf(Module: Instance, Root: Instance, RootCopy: Instance): Instance?
+local function FindInCopy(Module: Instance, Root: Instance, RootCopy: Instance): Instance?
 	if Module == Root then
 		return RootCopy
 	end
@@ -74,8 +74,8 @@ local function TwinOf(Module: Instance, Root: Instance, RootCopy: Instance): Ins
 		Current = Current.Parent :: Instance
 	end
 
-	local IsValid, Twins = pcall(RootCopy.QueryDescendants, RootCopy, table.concat(Steps, " "))
-	return if IsValid and #Twins == 1 then Twins[1] else nil
+	local IsValid, Matches = pcall(RootCopy.QueryDescendants, RootCopy, table.concat(Steps, " "))
+	return if IsValid and #Matches == 1 then Matches[1] else nil
 end
 
 local function PackageOf(Module: Instance): Instance
@@ -111,14 +111,14 @@ local function NewHost(Copy: Instance, Problems: { string }): Bench.Host
 			Copies[Package] = PackageCopy
 		end
 
-		local Twin = TwinOf(Module, Package, PackageCopy)
-		if not Twin then
+		local InCopy = FindInCopy(Module, Package, PackageCopy)
+		if not InCopy then
 			return Refuse(
 				`Bench.Import cannot find {Module:GetFullName()} in its copy; it or a parent is not Archivable, shares `
 					.. `its name with a sibling, or has a quote in its name`
 			)
 		end
-		return (require :: any)(Twin)
+		return (require :: any)(InCopy)
 	end
 
 	local function Modules(Parent: unknown): { Bench.Module }
@@ -196,18 +196,17 @@ function BenchFolder.Create(Source: ModuleScript): Entry
 	return { Path = Name, Module = Module }
 end
 
-function BenchFolder.Load(Entry: Entry): ("loaded" | "failed", Loaded | string)
+function BenchFolder.Load(Entry: Entry): (Loaded?, string?)
 	local Folder = ServerStorage:FindFirstChild(FOLDER_NAME)
 	if not Folder or not Entry.Module:IsDescendantOf(Folder) then
-		return "failed",
-			`{Entry.Path} is no longer inside ServerStorage.{FOLDER_NAME}; refresh the list and pick it again`
+		return nil, `{Entry.Path} is no longer inside ServerStorage.{FOLDER_NAME}; refresh the list and pick it again`
 	end
 
 	local Copy = Folder:Clone()
-	local Module = TwinOf(Entry.Module, Folder, Copy)
+	local Module = FindInCopy(Entry.Module, Folder, Copy)
 	if not Module then
 		Copy:Destroy()
-		return "failed",
+		return nil,
 			`{Entry.Path} cannot be found in the copy a run uses; it or a parent is not Archivable, shares its name `
 				.. `with a sibling, or has a quote in its name`
 	end
@@ -225,21 +224,21 @@ function BenchFolder.Load(Entry: Entry): ("loaded" | "failed", Loaded | string)
 	if not Succeeded then
 		Copy:Destroy()
 		local Reason = if #Problems > 0 then table.concat(Problems, "\n") else tostring(Result)
-		return "failed", `{Entry.Path} could not be required: {Reason}`
+		return nil, `{Entry.Path} could not be required: {Reason}`
 	end
 
 	if type(Result) ~= "table" or Result.Kind ~= "BenchSuite" then
 		Copy:Destroy()
-		return "failed", `{Entry.Path} must return the suite made by Bench.Suite, but returned {typeof(Result)}`
+		return nil, `{Entry.Path} must return the suite made by Bench.Suite, but returned {typeof(Result)}`
 	end
 
 	if Result.FormatVersion > Bench.FormatVersion then
 		Copy:Destroy()
-		return "failed",
+		return nil,
 			`{Entry.Path} was written for a newer Bench module ({Result.FormatVersion}); update the plugin to run it`
 	end
 
-	return "loaded", { Suite = Result, Copy = Copy }
+	return { Suite = Result, Copy = Copy }, nil
 end
 
 function BenchFolder.Release(Loaded: Loaded): ()
