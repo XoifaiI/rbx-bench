@@ -3,7 +3,8 @@
 
 --[=[
 	App: the panel: toolbar, bench list, chart, progress line, failure message and hover card. `mount` puts it into a
-	ScreenGui or plugin widget and returns the unmount
+	ScreenGui or plugin widget and returns the unmount. The failure message's slot holds the gap above it, so the
+	slot can grow from nothing without the panel jumping
 
 	Return type: the App module table
 	Example usage:
@@ -15,6 +16,7 @@ local BenchList = require("./Views/BenchList")
 local Chart = require("./Views/Chart")
 local Components = require("./Components")
 local Layout = require("./Layout")
+local Motion = require("./Motion")
 local RunDialog = require("./Views/RunDialog")
 local CaseRows = require("./CaseRows")
 local State = require("./State")
@@ -58,6 +60,46 @@ local function Panel(state: State.State, tooltip: Tooltip.Tooltip): Frame
 
 		local rows = CaseRows.ranked(state)
 
+		local failure = Motion.fade(function(): string?
+			local text = state.message()
+			return if text ~= "" then text else nil
+		end)
+
+		local progressWidth = Motion.followWithin(function(): unknown
+			return state.running()
+		end, function(): number
+			return state.progress()
+		end, Motion.CHROME)
+
+		local progressShown = Motion.follow(function(): number
+			return if state.running() then 1 else 0
+		end, Motion.CHROME)
+
+		local message = Components.Card({
+			Name = "Message",
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Position = UDim2.fromOffset(0, Layout.Gap),
+			Size = UDim2.fromScale(1, 0),
+			__TAG = { "Message" },
+			BackgroundTransparency = function()
+				return 1 - failure.shown()
+			end,
+
+			Text({
+				text = function()
+					return failure.last() or ""
+				end,
+				tags = { "TextOnBad" },
+				AutomaticSize = Enum.AutomaticSize.Y,
+				Size = UDim2.fromScale(1, 0),
+				TextWrapped = true,
+				TextTransparency = function()
+					return 1 - failure.shown()
+				end,
+			}),
+		})
+		local messageSize = Flux.property(message, "AbsoluteSize")
+
 		return Flux.edit(root) {
 			new "Frame" {
 				Name = "Content",
@@ -67,7 +109,7 @@ local function Panel(state: State.State, tooltip: Tooltip.Tooltip): Frame
 				end,
 
 				Flux.padding(Layout.Inset),
-				Flux.list({ gap = Layout.Gap }),
+				Flux.list(),
 
 				Toolbar({
 					state = state,
@@ -81,6 +123,7 @@ local function Panel(state: State.State, tooltip: Tooltip.Tooltip): Frame
 					Size = UDim2.fromScale(1, 0),
 
 					Flux.flex(),
+					Flux.padding({ top = Layout.Gap }),
 					Flux.list({
 						direction = function()
 							return if wide() then "x" else "y"
@@ -106,30 +149,28 @@ local function Panel(state: State.State, tooltip: Tooltip.Tooltip): Frame
 					},
 				},
 
-				Components.Card({
-					Name = "Message",
-					AutomaticSize = Enum.AutomaticSize.Y,
-					Size = UDim2.fromScale(1, 0),
-					__TAG = { "Message" },
+				new "Frame" {
+					Name = "MessageSlot",
+					ClipsDescendants = true,
+					Size = function()
+						return UDim2.new(1, 0, 0, failure.shown() * (messageSize().Y + Layout.Gap))
+					end,
 					Visible = function()
-						return state.message() ~= ""
+						return Motion.isVisible(failure.shown)
 					end,
 
-					Text({
-						text = state.message,
-						tags = { "TextOnBad" },
-						AutomaticSize = Enum.AutomaticSize.Y,
-						Size = UDim2.fromScale(1, 0),
-						TextWrapped = true,
-					}),
-				}),
+					message,
+				},
 			},
 
 			new "Frame" {
 				Name = "Progress",
 				__TAG = { "Progress" },
 				Size = function()
-					return UDim2.new(if state.running() then state.progress() else 0, 0, 0, PROGRESS_HEIGHT)
+					return UDim2.new(progressWidth(), 0, 0, PROGRESS_HEIGHT)
+				end,
+				BackgroundTransparency = function()
+					return 1 - progressShown()
 				end,
 			},
 

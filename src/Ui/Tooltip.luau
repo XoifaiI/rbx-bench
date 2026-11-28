@@ -2,9 +2,8 @@
 --!optimize 2
 
 --[=[
-	Tooltip: the hover card: follows the pointer and shows what the innermost attached object under it says about
-	itself. `attach` asks the object once when the pointer enters it; `track` asks again every time the pointer moves.
-	The card is kept inside the panel from top to bottom
+	Tooltip: the hover card. It shows what the innermost attached object under the pointer says about itself,
+	stays inside the panel and follows the pointer with no lag, because a card that trails the pointer feels broken
 
 	Return type: the Tooltip module table
 	Example usage:
@@ -16,6 +15,7 @@
 local Flux = require("../Packages/Flux")
 local Components = require("./Components")
 local Layout = require("./Layout")
+local Motion = require("./Motion")
 local Style = require("./Style")
 
 local new = Flux.new
@@ -125,13 +125,17 @@ function Tooltip.track(object: GuiObject, level: number, describeAt: (pointer: V
 	wire(object, level, describeAt, true)
 end
 
-function Tooltip.Layer(props: { tooltip: Tooltip, root: GuiObject }): Frame
+function Tooltip.Layer(props: { tooltip: Tooltip, root: GuiObject }): CanvasGroup
 	local tooltip = props.tooltip
 	local isDark = Style.dark:get()
 	local bounds = Flux.property(props.root, "AbsoluteSize")
 
+	local fade = Motion.fade(function(): Content?
+		return tooltip.content()
+	end)
+
 	local function lines(): { Line }
-		local content = tooltip.content()
+		local content = fade.last()
 		return if content then content.lines else {}
 	end
 
@@ -147,7 +151,7 @@ function Tooltip.Layer(props: { tooltip: Tooltip, root: GuiObject }): Frame
 		return place().Y > bounds().Y / 2
 	end)
 
-	local card = new "Frame" {
+	local card = new "CanvasGroup" {
 		Name = "Tooltip",
 		ZIndex = 100,
 		Interactable = false,
@@ -156,7 +160,10 @@ function Tooltip.Layer(props: { tooltip: Tooltip, root: GuiObject }): Frame
 		__TAG = { "Card", "Raised" },
 
 		Visible = function()
-			return tooltip.content() ~= nil
+			return Motion.isVisible(fade.shown)
+		end,
+		GroupTransparency = function()
+			return 1 - fade.shown()
 		end,
 		AnchorPoint = function()
 			return Vector2.new(if atRight() then 1 else 0, if atBottom() then 1 else 0)
@@ -167,7 +174,7 @@ function Tooltip.Layer(props: { tooltip: Tooltip, root: GuiObject }): Frame
 
 		Text({
 			text = function()
-				local content = tooltip.content()
+				local content = fade.last()
 				return if content then content.title else ""
 			end,
 			tags = { "TextTitle" },

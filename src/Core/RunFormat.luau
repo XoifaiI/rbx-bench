@@ -3,18 +3,10 @@
 --!optimize 2
 
 --[=[
-	RunFormat: packs a bench's runs into one buffer and back, for saving. Samples are not kept. Fields are
-	byte-aligned columns so zstd compresses them well: after a header of counts come every record's numbers (the low
-	six bytes of each, then the high two), its u32 words, histogram bins as u16 sample counts, u8 flags, the text of
-	every string, and last the bins of any histogram that is not whole counts, as f64. Column C of record I in a
-	section is at the section's start plus (C * the section's record count + I) * the column's width
-
-	Each record type is written and read in one pass over all records of that type, children before parents on the
-	way in, so a case takes its spans as a slice of the spans already read
-
-	Change the layout only together with FORMAT_VERSION and LAYOUTS. Older versions are still read: version 1 had no
-	span depths and reads every span at depth 1, and version 2's bytes per call column is skipped. A verdict or a
-	rule status is saved as its place in VERDICTS or STATUSES, so those lists only ever grow at the end
+	RunFormat: packs a bench's runs into one buffer and back, for saving. Fields are byte-aligned columns so zstd
+	compresses them well: column C of record I is at its section's start plus (C * count + I) * width. Children are
+	written before parents, so a case reads its spans as a slice. Change the layout only with FORMAT_VERSION and
+	LAYOUTS, and grow VERDICTS and STATUSES only at the end, because older saves are still read
 
 	Return type: the RunFormat module table
 	Example usage:

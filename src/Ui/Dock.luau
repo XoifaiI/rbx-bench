@@ -96,6 +96,21 @@ local function debugCommands(
 			return state.running:peek()
 		end,
 
+		step = function(index: number)
+			state.showRun(index)
+			return state.runIndex:peek()
+		end,
+
+		size = function(index: number)
+			state.showSize(index)
+			return state.sizeIndex:peek()
+		end,
+
+		bars = function(height: number?)
+			state.setBarsHeight(height)
+			return state.barsHeight:peek()
+		end,
+
 		show = function(name: string)
 			state.showCase(name)
 			return state.selectedCase:peek()
@@ -104,6 +119,11 @@ local function debugCommands(
 		answer = function(wanted: number?)
 			state.answer(wanted)
 			return state.question:peek() == nil
+		end,
+
+		cancel = function()
+			state.cancel()
+			return state.runStatus:peek()
 		end,
 
 		question = function()
@@ -131,6 +151,8 @@ local function debugCommands(
 			return {
 				selected = state.selectedPath:peek(),
 				running = state.running:peek(),
+				runStatus = state.runStatus:peek(),
+				barsHeight = state.barsHeight:peek(),
 				progress = state.progress:peek(),
 				message = state.message:peek(),
 				runs = #state.runs:peek(),

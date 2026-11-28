@@ -16,6 +16,7 @@ local Format = require("../../Util/Format")
 local RunHistory = require("../../Studio/RunHistory")
 local Results = require("../../Core/Results")
 local Layout = require("../Layout")
+local Motion = require("../Motion")
 local State = require("../State")
 
 local new = Flux.new
@@ -29,6 +30,13 @@ local BAR_WIDTH = 8
 local BAR_GAP = 3
 local SHORTEST_BAR = 0.15
 local ROUNDS_FIELD_WIDTH = 110
+
+local RUN_BUTTON_TEXT: { [State.RunStatus]: string } = {
+	idle = "Run",
+	running = "Cancel",
+	asking = "Cancel",
+	cancelling = "Cancelling",
+}
 
 local function RunStrip(props: { state: State.State, isCompact: () -> boolean }): Frame
 	local state = props.state
@@ -71,6 +79,12 @@ local function RunStrip(props: { state: State.State, isCompact: () -> boolean })
 			Flux.list({ direction = "x", gap = BAR_GAP, align = "end" }),
 
 			Flux.forIndex(state.runs, function(index, run: Flux.Node<RunHistory.RunRecord>)
+				local height = Motion.enter(function(): number
+					local median = State.baselineMedian(run(), state.sizeIndex())
+					local share = if tallest() > 0 then median / tallest() else 0
+					return math.clamp(share, SHORTEST_BAR, 1)
+				end, Motion.DATA, 0)
+
 				return new "TextButton" {
 					Text = "",
 					__TAG = {
@@ -80,9 +94,7 @@ local function RunStrip(props: { state: State.State, isCompact: () -> boolean })
 						end,
 					},
 					Size = function()
-						local median = State.baselineMedian(run(), state.sizeIndex())
-						local height = if tallest() > 0 then median / tallest() else 0
-						return UDim2.new(0, BAR_WIDTH, math.clamp(height, SHORTEST_BAR, 1), 0)
+						return UDim2.new(0, BAR_WIDTH, height(), 0)
 					end,
 
 					Activated = function()
@@ -166,7 +178,7 @@ local function Rounds(props: { state: State.State }): Frame
 				return not editing()
 			end,
 			enabled = function()
-				return not state.running()
+				return state.can("setRounds")
 			end,
 			onClick = function()
 				editing(true)
@@ -191,11 +203,15 @@ local function Toolbar(props: { state: State.State, isCompact: () -> boolean }):
 		Flux.list({ direction = "x", gap = Layout.Gap, align = "center" }),
 
 		Button({
-			text = Flux.pick(state.running, "Cancel", "Run"),
+			text = function()
+				return RUN_BUTTON_TEXT[state.runStatus()]
+			end,
 			accent = true,
-			enabled = hasBench,
+			enabled = function()
+				return hasBench() and (state.can("run") or state.can("cancel"))
+			end,
 			onClick = function()
-				if state.running:peek() then
+				if state.can("cancel") then
 					state.cancel()
 				else
 					state.run()
@@ -249,7 +265,7 @@ local function Toolbar(props: { state: State.State, isCompact: () -> boolean }):
 		Button({
 			text = "Clear runs",
 			enabled = function()
-				return #state.runs() > 0 and not state.running()
+				return #state.runs() > 0 and state.can("clear")
 			end,
 			onClick = state.clear,
 		}),

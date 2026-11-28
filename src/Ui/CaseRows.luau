@@ -4,7 +4,8 @@
 --[=[
 	CaseRows: the cases of the size on show, fastest first, the flame graph of a case's spans, and what the hover card
 	says about a case, one span or one time bin. A span starts where the span before it at its depth ended, and its
-	first child starts where it does, so the order is the order they first ran and the gaps are time outside any span
+	first child starts where it does, so the order is the order they first ran and the gaps are time outside any span.
+	A row's key joins its bench and case name, so two benches' cases of the same name never share a bar or a curve
 
 	Return type: the CaseRows module table
 	Example usage:
@@ -54,6 +55,10 @@ function CaseRows.ranked(state: State.State): Flux.Node<{ Row }>
 		end)
 		return built
 	end)
+end
+
+function CaseRows.keyOf(path: string?, row: Row): string
+	return `{path or ""}\0{row.case.Name}`
 end
 
 function CaseRows.depth(case: Results.CaseRecord): number

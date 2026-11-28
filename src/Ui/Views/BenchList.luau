@@ -122,7 +122,7 @@ local function BenchList(props: { state: State.State, size: Flux.Reactive<UDim2>
 						text = "Run",
 						Size = ROW_BUTTON,
 						enabled = function()
-							return not state.running()
+							return state.can("run")
 						end,
 						onClick = function()
 							state.select(path)

@@ -171,13 +171,15 @@ local RULES: { Rule } = {
 	{ selector = ".Wash", priority = 1, properties = { BackgroundTransparency = 0.85 } },
 	{ selector = ".Marker", priority = 1, properties = { BackgroundTransparency = 0.35 } },
 	{ selector = ".Ink::UICorner", priority = 1, properties = { CornerRadius = UDim.new(0, 4) } },
+	{ selector = ".Grip", priority = 1, properties = { BackgroundColor3 = "$TextDim" } },
+	{ selector = ".Grip::UICorner", priority = 1, properties = { CornerRadius = UDim.new(0, 2) } },
 
 	{ selector = ".TextOnPale", priority = 2, properties = { TextColor3 = "$InkDeep" } },
 	{ selector = ".TextOnDeep", priority = 2, properties = { TextColor3 = "$InkPale" } },
 	{
 		selector = ".Scrim",
 		priority = 1,
-		properties = { BackgroundTransparency = 0.35, BackgroundColor3 = "$Surface" },
+		properties = { BackgroundColor3 = "$Surface" },
 	},
 }
 

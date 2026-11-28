@@ -14,6 +14,7 @@ local Flux = require("../../Packages/Flux")
 local Components = require("../Components")
 local Format = require("../../Util/Format")
 local Layout = require("../Layout")
+local Motion = require("../Motion")
 local Preferences = require("../../Studio/Preferences")
 local State = require("../State")
 
@@ -25,10 +26,16 @@ local WIDTH = 440
 local INSET = 20
 local FIELD_WIDTH = 140
 local LAYER = 50
+local SCRIM_OPACITY = 0.65
+local ENTRY_SCALE = 0.96
 
 local function RunDialog(props: { state: State.State }): TextButton
 	local state = props.state
 	local typed = Flux.signal("")
+
+	local fade = Motion.fade(function(): State.Question?
+		return state.question()
+	end)
 
 	local wanted = Flux.computed(function(): number?
 		local count = tonumber(typed())
@@ -85,19 +92,33 @@ local function RunDialog(props: { state: State.State }): TextButton
 		Text = "",
 		AutoButtonColor = false,
 		__TAG = { "Scrim" },
+		BackgroundTransparency = function()
+			return 1 - fade.shown() * SCRIM_OPACITY
+		end,
 
 		Visible = function()
+			return Motion.isVisible(fade.shown)
+		end,
+		Interactable = function()
 			return state.question() ~= nil
 		end,
 
-		new "Frame" {
+		new "CanvasGroup" {
 			Name = "Card",
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
 			AutomaticSize = Enum.AutomaticSize.Y,
 			Size = UDim2.fromOffset(WIDTH, 0),
+			GroupTransparency = function()
+				return 1 - fade.shown()
+			end,
 			__TAG = { "Card", "Raised" },
 
+			new "UIScale" {
+				Scale = function()
+					return ENTRY_SCALE + (1 - ENTRY_SCALE) * fade.shown()
+				end,
+			},
 			Flux.padding(INSET),
 			Flux.list({ gap = Layout.Gap }),
 
@@ -105,7 +126,7 @@ local function RunDialog(props: { state: State.State }): TextButton
 
 			Text({
 				text = function()
-					local question = state.question()
+					local question = fade.last()
 					local count = wanted()
 					if not question then
 						return ""
